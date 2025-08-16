@@ -1,8 +1,9 @@
 [build]
-  command = "npm install && npm run build"
+  command = "npm install && NEXT_DISABLE_ESLINT_PLUGIN=true npm run build"
   
 [build.environment]
   NODE_VERSION = "20"
+  NEXT_DISABLE_ESLINT_PLUGIN = "true"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
