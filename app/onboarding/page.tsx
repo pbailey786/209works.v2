@@ -17,18 +17,28 @@ export default function OnboardingPage() {
   const handleContinue = async () => {
     if (!userType || !user) return;
 
-    // Update user metadata with their role
-    await user.update({
-      publicMetadata: {
-        role: userType
-      }
-    });
+    try {
+      // Update user metadata with their role
+      await user.update({
+        publicMetadata: {
+          role: userType
+        }
+      });
 
-    // Redirect based on user type
-    if (userType === 'job-seeker') {
-      router.push('/dashboard');
-    } else {
-      router.push('/employer');
+      // Redirect based on user type
+      if (userType === 'job-seeker') {
+        router.push('/dashboard');
+      } else {
+        router.push('/employer');
+      }
+    } catch (error) {
+      console.error('Error updating user metadata:', error);
+      // Still redirect even if metadata update fails
+      if (userType === 'job-seeker') {
+        router.push('/dashboard');
+      } else {
+        router.push('/employer');
+      }
     }
   };
 

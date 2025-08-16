@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { mockJobs } from '@/data/mockJobs';
+import JobApplicationModal from '@/components/JobApplicationModal';
 import { 
   MapPin, 
   Clock, 
@@ -32,7 +33,7 @@ import {
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [isApplying, setIsApplying] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [hasApplied, setHasApplied] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
@@ -58,13 +59,9 @@ export default function JobDetailPage() {
     );
   }
 
-  const handleApply = () => {
-    setIsApplying(true);
-    // Simulate application process
-    setTimeout(() => {
-      setIsApplying(false);
-      setHasApplied(true);
-    }, 2000);
+  const handleApplicationSuccess = () => {
+    setHasApplied(true);
+    setShowApplicationModal(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -156,11 +153,10 @@ export default function JobDetailPage() {
                     </Button>
                   ) : (
                     <Button 
-                      onClick={handleApply} 
-                      disabled={isApplying}
+                      onClick={() => setShowApplicationModal(true)}
                       className="min-w-32"
                     >
-                      {isApplying ? 'Applying...' : 'Apply Now'}
+                      Apply Now
                     </Button>
                   )}
                   
@@ -400,6 +396,19 @@ export default function JobDetailPage() {
             ))}
           </div>
         </div>
+
+        {/* Application Modal */}
+        <JobApplicationModal
+          isOpen={showApplicationModal}
+          onClose={() => setShowApplicationModal(false)}
+          job={{
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: job.location
+          }}
+          onSuccess={handleApplicationSuccess}
+        />
       </div>
     </div>
   );
