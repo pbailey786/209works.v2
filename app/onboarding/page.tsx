@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,18 +13,32 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { user } = useUser();
   const [userType, setUserType] = useState<'job-seeker' | 'employer' | ''>('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Check if user already has a role set in localStorage
+  useEffect(() => {
+    if (user) {
+      const storedRole = localStorage.getItem(`userRole_${user.id}`);
+      if (storedRole === 'job-seeker') {
+        router.push('/dashboard');
+      } else if (storedRole === 'employer') {
+        router.push('/employer');
+      }
+    }
+  }, [user, router]);
 
   const handleContinue = async () => {
     if (!userType || !user) return;
 
-    try {
-      // Update user metadata with their role
-      await user.update({
-        publicMetadata: {
-          role: userType
-        }
-      });
+    setIsLoading(true);
 
+    try {
+      // Store the user role in localStorage
+      localStorage.setItem(`userRole_${user.id}`, userType);
+
+      // For now, we'll use localStorage to track user roles
+      // In production, this would be stored in the database
+      
       // Redirect based on user type
       if (userType === 'job-seeker') {
         router.push('/dashboard');
@@ -32,13 +46,8 @@ export default function OnboardingPage() {
         router.push('/employer');
       }
     } catch (error) {
-      console.error('Error updating user metadata:', error);
-      // Still redirect even if metadata update fails
-      if (userType === 'job-seeker') {
-        router.push('/dashboard');
-      } else {
-        router.push('/employer');
-      }
+      console.error('Error during onboarding:', error);
+      setIsLoading(false);
     }
   };
 
@@ -118,11 +127,11 @@ export default function OnboardingPage() {
           <div className="pt-4">
             <Button 
               onClick={handleContinue} 
-              disabled={!userType}
+              disabled={!userType || isLoading}
               className="w-full"
               size="lg"
             >
-              Continue
+              {isLoading ? 'Setting up...' : 'Continue'}
             </Button>
           </div>
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,6 +23,20 @@ import {
 export default function EmployerDashboard() {
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    // Check if user has completed onboarding and is an employer
+    if (user) {
+      const storedRole = localStorage.getItem(`userRole_${user.id}`);
+      if (!storedRole) {
+        redirect('/onboarding');
+      }
+      // Redirect job seekers to their dashboard
+      else if (storedRole === 'job-seeker') {
+        redirect('/dashboard');
+      }
+    }
+  }, [user]);
 
   // Mock data for now
   const stats = {

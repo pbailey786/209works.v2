@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth, UserButton } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Briefcase } from 'lucide-react';
+import RoleSwitcher from '@/components/RoleSwitcher';
 
 export function Header() {
   const { isSignedIn } = useAuth();
@@ -30,9 +31,7 @@ export function Header() {
                 <Link href="/dashboard">
                   <Button variant="ghost">Dashboard</Button>
                 </Link>
-                <Link href="/employer">
-                  <Button variant="ghost">For Employers</Button>
-                </Link>
+                <RoleSwitcher />
                 <UserButton 
                   afterSignOutUrl="/"
                   appearance={{

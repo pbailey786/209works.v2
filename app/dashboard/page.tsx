@@ -38,13 +38,15 @@ export default function DashboardPage() {
     }
     
     // Check if user has completed onboarding
-    if (user && !user.publicMetadata?.role) {
-      redirect('/onboarding');
-    }
-
-    // Redirect employers to their dashboard
-    if (user && user.publicMetadata?.role === 'employer') {
-      redirect('/employer');
+    if (user) {
+      const storedRole = localStorage.getItem(`userRole_${user.id}`);
+      if (!storedRole) {
+        redirect('/onboarding');
+      }
+      // Redirect employers to their dashboard
+      else if (storedRole === 'employer') {
+        redirect('/employer');
+      }
     }
   }, [isLoaded, userId, user]);
 
