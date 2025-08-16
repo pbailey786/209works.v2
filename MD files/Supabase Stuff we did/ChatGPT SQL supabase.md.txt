@@ -1,0 +1,294 @@
+Totally. Let’s bolt O*NET on cleanly without the pain this time. Here’s a **drop-in plan for Supabase/Postgres** that (a) keeps O*NET data separate, (b) only loads the slices your app actually needs, and (c) makes it easy to search and join from your `jobs` table.
+
+> Context: O\*NET’s current production DB is **29.3**. It’s distributed as **flat text files** (and DB-specific scripts for other engines). We’ll import the text files directly into Postgres. ([onetcenter.org][1], [O\*NET OnLine][2])
+
+---
+
+# 1) What we’ll load (minimal but powerful)
+
+* `onet.occupations` — the canonical list (O\*NET-SOC code, title, description).
+* `onet.alt_titles` — alternate/lay titles.
+* `onet.tasks` — task statements.
+* `onet.skills` / `onet.abilities` / `onet.knowledge` — descriptor ratings (importance/level).
+
+This is enough to power job-title autocomplete, JD enrichment, and your AI prompts.
+
+---
+
+# 2) Create schema + tables (run in Supabase SQL editor)
+
+```sql
+-- Schema for third-party data
+create schema if not exists onet;
+
+-- 2.1 Occupations
+create table if not exists onet.occupations (
+  onetsoc_code text primary key,           -- e.g., '15-1252.00'
+  title text not null,
+  description text
+);
+
+-- 2.2 Alternate titles
+create table if not exists onet.alt_titles (
+  id bigserial primary key,
+  onetsoc_code text not null references onet.occupations(onetsoc_code) on delete cascade,
+  alt_title text not null
+);
+
+-- 2.3 Tasks
+create table if not exists onet.tasks (
+  id bigserial primary key,
+  onetsoc_code text not null references onet.occupations(onetsoc_code) on delete cascade,
+  task text not null
+);
+
+-- 2.4 Descriptor ratings (skills, abilities, knowledge)
+-- O*NET files include scale values (Importance, Level); we store both when present.
+create table if not exists onet.skills (
+  id bigserial primary key,
+  onetsoc_code text not null references onet.occupations(onetsoc_code) on delete cascade,
+  element_id text not null,               -- O*NET element id for the skill
+  element_name text not null,
+  importance numeric,                     -- 0-100 (nullable if missing)
+  level numeric                           -- 0-7 (nullable)
+);
+
+create table if not exists onet.abilities (
+  id bigserial primary key,
+  onetsoc_code text not null references onet.occupations(onetsoc_code) on delete cascade,
+  element_id text not null,
+  element_name text not null,
+  importance numeric,
+  level numeric
+);
+
+create table if not exists onet.knowledge (
+  id bigserial primary key,
+  onetsoc_code text not null references onet.occupations(onetsoc_code) on delete cascade,
+  element_id text not null,
+  element_name text not null,
+  importance numeric,
+  level numeric
+);
+
+-- Helpful indexes for search & joins
+create extension if not exists pg_trgm;
+create index if not exists onet_occ_title_trgm on onet.occupations using gin (lower(title) gin_trgm_ops);
+create index if not exists onet_occ_code_idx   on onet.occupations (onetsoc_code);
+create index if not exists onet_alt_title_trgm on onet.alt_titles using gin (lower(alt_title) gin_trgm_ops);
+create index if not exists onet_tasks_trgm     on onet.tasks using gin (lower(task) gin_trgm_ops);
+```
+
+> We keep O\*NET under its own `onet` schema. No RLS here; it’s reference data.
+
+---
+
+# 3) Download the O\*NET flat files (once)
+
+Grab the latest O*NET Database from the O*NET Resource Center (29.3 as of July 2025). You’ll get a ZIP with **text/CSV-like** files and a **data dictionary** explaining columns. ([onetcenter.org][1], [O\*NET OnLine][2])
+
+Files you’ll use (names can vary slightly by release):
+
+* `Occupation Data.txt` (or similar)
+* `Alternate Titles.txt`
+* `Task Statements.txt`
+* `Skills.txt`
+* `Abilities.txt`
+* `Knowledge.txt`
+
+They’re typically **tab-delimited with headers** (check the data dictionary for exact columns). ([onetcenter.org][3])
+
+---
+
+# 4) Import into Supabase Postgres
+
+The easiest path is to **import locally with `psql`** connecting to your Supabase DB (because the web SQL editor can’t do client-side `\copy` of big files).
+
+**Map files → tables** (adjust column names to match your release’s headers):
+
+```sql
+-- 4.1 Occupations
+-- Expecting headers like: "O*NET-SOC Code" | "Title" | "Description"
+\copy onet.occupations (onetsoc_code, title, description)
+from 'Occupation Data.txt' with (format csv, header true, delimiter E'\t');
+
+-- 4.2 Alternate titles
+-- Headers: "O*NET-SOC Code" | "Alternate Title"
+\copy onet.alt_titles (onetsoc_code, alt_title)
+from 'Alternate Titles.txt' with (format csv, header true, delimiter E'\t');
+
+-- 4.3 Task statements
+-- Headers: "O*NET-SOC Code" | "Task"
+\copy onet.tasks (onetsoc_code, task)
+from 'Task Statements.txt' with (format csv, header true, delimiter E'\t');
+
+-- 4.4 Skills/Abilities/Knowledge
+-- Headers typically include: "O*NET-SOC Code","Element ID","Element Name","Scale ID","Data Value" etc.
+-- You may have multiple rows per element/scale; pivot to keep Importance & Level.
+-- Quick import to a staging table is often easiest; or import only Importance/Level rows.
+```
+
+### Quick staging approach (recommended for the 3 descriptor files)
+
+```sql
+-- Staging table (shared)
+drop table if exists onet._stage;
+create table onet._stage (
+  file text,
+  onetsoc_code text,
+  element_id text,
+  element_name text,
+  scale_id text,
+  data_value numeric
+);
+
+-- Load each descriptor file into _stage with a 'file' tag
+-- Example for Skills.txt (repeat for Abilities/Knowledge)
+-- Headers vary per release; match them accordingly.
+\copy onet._stage (onetsoc_code, element_id, element_name, scale_id, data_value)
+from 'Skills.txt' with (format csv, header true, delimiter E'\t');
+update onet._stage set file = 'skills' where file is null;
+
+\copy onet._stage (onetsoc_code, element_id, element_name, scale_id, data_value)
+from 'Abilities.txt' with (format csv, header true, delimiter E'\t');
+update onet._stage set file = 'abilities' where file is null;
+
+\copy onet._stage (onetsoc_code, element_id, element_name, scale_id, data_value)
+from 'Knowledge.txt' with (format csv, header true, delimiter E'\t');
+update onet._stage set file = 'knowledge' where file is null;
+
+-- Pivot Importance/Level into the canonical tables
+insert into onet.skills (onetsoc_code, element_id, element_name, importance, level)
+select s.onetsoc_code, s.element_id, s.element_name,
+       max(case when s.scale_id ilike 'IM'% then s.data_value end) as importance,
+       max(case when s.scale_id ilike 'LV'% then s.data_value end) as level
+from onet._stage s
+where s.file = 'skills'
+group by s.onetsoc_code, s.element_id, s.element_name;
+
+insert into onet.abilities (onetsoc_code, element_id, element_name, importance, level)
+select s.onetsoc_code, s.element_id, s.element_name,
+       max(case when s.scale_id ilike 'IM'% then s.data_value end),
+       max(case when s.scale_id ilike 'LV'% then s.data_value end)
+from onet._stage s
+where s.file = 'abilities'
+group by s.onetsoc_code, s.element_id, s.element_name;
+
+insert into onet.knowledge (onetsoc_code, element_id, element_name, importance, level)
+select s.onetsoc_code, s.element_id, s.element_name,
+       max(case when s.scale_id ilike 'IM'% then s.data_value end),
+       max(case when s.scale_id ilike 'LV'% then s.data_value end)
+from onet._stage s
+where s.file = 'knowledge'
+group by s.onetsoc_code, s.element_id, s.element_name;
+
+drop table onet._stage;
+```
+
+> The exact column names differ slightly by O\*NET release. Use the **Data Dictionary** page for your version to confirm headers. ([onetcenter.org][3])
+
+---
+
+# 5) Wire O\*NET into your app
+
+### 5.1 Lightweight join back to jobs
+
+Add a nullable column to `jobs` so you can optionally pin a job to an O\*NET occupation:
+
+```sql
+alter table public.jobs
+  add column if not exists onetsoc_code text references onet.occupations(onetsoc_code);
+
+create index if not exists jobs_onet_idx on public.jobs (onetsoc_code);
+```
+
+### 5.2 Fast search views (autocomplete & enrichment)
+
+```sql
+-- Concise search surface
+create or replace view onet.search as
+select
+  o.onetsoc_code,
+  o.title,
+  o.description,
+  coalesce(string_agg(distinct at.alt_title, ' | ') filter (where at.alt_title is not null), '') as alt_titles
+from onet.occupations o
+left join onet.alt_titles at using (onetsoc_code)
+group by o.onetsoc_code, o.title, o.description;
+
+-- Materialized view with trigram index (optional)
+drop materialized view if exists onet.search_m cascade;
+create materialized view onet.search_m as
+select * from onet.search;
+
+create index if not exists onet_search_m_title_trgm on onet.search_m using gin (lower(title) gin_trgm_ops);
+create index if not exists onet_search_m_alt_trgm   on onet.search_m using gin (lower(alt_titles) gin_trgm_ops);
+
+-- Refresh helper
+create or replace function onet.refresh_search_m() returns void language sql as $$
+  refresh materialized view concurrently onet.search_m;
+$$;
+```
+
+Client-side, you can now autocomplete with:
+
+```sql
+select onetsoc_code, title
+from onet.search_m
+where lower(title) like lower('%nurse%')
+   or lower(alt_titles) like lower('%nurse%')
+limit 20;
+```
+
+### 5.3 Enrichment snippets
+
+* Pull **top tasks** for a SOC code to seed a JD.
+* Use **highest-importance knowledge/skills** to suggest screening questions.
+
+```sql
+-- Top 10 tasks for a SOC
+select task
+from onet.tasks
+where onetsoc_code = '29-1141.00'
+limit 10;
+
+-- Top skills by importance
+select element_name, importance, level
+from onet.skills
+where onetsoc_code = '29-1141.00'
+order by importance desc nulls last
+limit 10;
+```
+
+---
+
+# 6) Operational notes
+
+* **Attribution**: O*NET requires attribution when you use their data in apps/sites. Keep a small footer like
+  “O*NET® data courtesy of the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA).”
+  See the O\*NET Database page for terms and current release. ([onetcenter.org][4])
+* **Updates**: O\*NET releases new versions periodically (e.g., 29.3 current). When you update, re-import the new files into `onet` and refresh materialized views. ([onetcenter.org][1])
+* **Size**: It’s not huge; imports complete quickly. Keep `onet` schema separate to avoid polluting public.
+
+---
+
+## TL;DR steps you can hand to your LLM coder
+
+1. Create the `onet` schema and tables (Section 2 SQL).
+2. Download latest O\*NET and unzip the **text files** (Section 3). ([O\*NET OnLine][2])
+3. Use `psql \copy` to load **occupation**, **alt titles**, **tasks**.
+4. Load **skills/abilities/knowledge** via the staging/pivot SQL above.
+5. Add `jobs.onetsoc_code` (nullable FK).
+6. Create `onet.search_m` materialized view + trigram indexes; call `onet.refresh_search_m()` after each import.
+7. In the app:
+
+   * Autocomplete job titles from `onet.search_m`.
+   * On job creation, let the employer pick an O\*NET match → store `onetsoc_code`.
+   * Enrich the JD using tasks/skills/knowledge queries for that code.
+
+If you want, I can also give you a tiny **/api/onet/search** route and a **shadcn combobox** that queries `onet.search_m` for titles/alt-titles (wired to your `jobs` form).
+
+[1]: https://www.onetcenter.org/db_releases.html?utm_source=chatgpt.com "O*NET® Database Releases Archive"
+[2]: https://www.onetonline.org/help/onet/database?utm_source=chatgpt.com "O*NET OnLine Help: The Database"
+[3]: https://www.onetcenter.org/dictionary/27.0/excel/?utm_source=chatgpt.com "O*NET 27.0 Data Dictionary"
+[4]: https://www.onetcenter.org/database.html?utm_source=chatgpt.com "O*NET 29.3 Database"
