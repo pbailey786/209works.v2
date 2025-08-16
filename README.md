@@ -1,36 +1,146 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 209.works - AI-Powered Local Job Board
 
-## Getting Started
+A modern job board platform built with Next.js 15, featuring AI-powered job matching, hyper-local job discovery, and seamless employer-candidate connections.
 
-First, run the development server:
+## 🚀 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **AI-Powered Matching**: Smart job recommendations based on skills, experience, and preferences
+- **Hyper-Local Focus**: Find opportunities in your neighborhood with distance-based search
+- **Enhanced Job Cards**: "Should I Apply?" AI analysis for better decision making
+- **Dual User Roles**: Separate experiences for job seekers and employers
+- **Real-time Updates**: Instant notifications for new matches and application updates
+- **Modern UI**: Beautiful, responsive design with light/dark mode support
+
+## 🛠️ Tech Stack
+
+- **Framework**: Next.js 15.4.6 with App Router
+- **Language**: TypeScript 5
+- **Styling**: Tailwind CSS v4 with shadcn/ui components
+- **Authentication**: Clerk
+- **Database**: Supabase (configured)
+- **Icons**: Lucide React
+- **Package Manager**: npm
+
+## 📁 Project Structure
+
+```
+209works-v2/
+├── app/                    # Next.js app directory
+│   ├── dashboard/         # Protected user dashboard
+│   ├── jobs/             # Job browsing and details
+│   ├── onboarding/       # New user onboarding
+│   ├── sign-in/          # Authentication pages
+│   └── sign-up/
+├── components/            # React components
+│   ├── ui/               # shadcn/ui components
+│   └── ...               # Feature components
+├── lib/                   # Utilities and configurations
+├── data/                  # Mock data
+├── types/                 # TypeScript type definitions
+└── public/               # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚦 Getting Started
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Prerequisites
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Node.js 18+ 
+- npm or yarn
+- Git
 
-## Learn More
+### Installation
 
-To learn more about Next.js, take a look at the following resources:
+1. Clone the repository:
+```bash
+git clone https://github.com/pbailey786/209works.v2.git
+cd 209works.v2
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. Set up environment variables:
+```bash
+cp .env.example .env.local
+```
 
-## Deploy on Vercel
+Add your Clerk and Supabase keys to `.env.local`:
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. Run the development server:
+```bash
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open [http://localhost:3000](http://localhost:3000) to see the application.
+
+## 📱 Key Pages
+
+- **Home** (`/`) - Landing page with platform overview
+- **Browse Jobs** (`/jobs`) - Search and filter job listings
+- **Job Details** (`/jobs/[id]`) - Detailed job information with AI analysis
+- **Dashboard** (`/dashboard`) - User dashboard (protected)
+- **Sign In/Up** (`/sign-in`, `/sign-up`) - Authentication pages
+- **Onboarding** (`/onboarding`) - New user setup
+
+## 🔐 Authentication
+
+The app uses Clerk for authentication with:
+- Email/password sign up
+- Social login options
+- Protected routes with middleware
+- Role-based access (job seeker vs employer)
+
+## 🎨 Customization
+
+### Tailwind CSS Configuration
+The project uses Tailwind CSS v4 with CSS variables for theming. Customize colors and styles in:
+- `app/globals.css` - Global styles and CSS variables
+- `tailwind.config.ts` - Tailwind configuration
+
+### Components
+All UI components are built with shadcn/ui and can be customized in the `components/ui/` directory.
+
+## 📝 Available Scripts
+
+- `npm run dev` - Start development server with Turbopack
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+
+## 🚀 Deployment
+
+### Deploy on Vercel
+
+The easiest deployment method:
+
+1. Push your code to GitHub
+2. Import project in [Vercel](https://vercel.com)
+3. Add environment variables
+4. Deploy!
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pbailey786/209works.v2)
+
+## 📄 License
+
+This project is private and proprietary.
+
+## 🤝 Contributing
+
+This is a private project. Please contact the repository owner for contribution guidelines.
+
+## 📧 Contact
+
+For questions or support, please contact the repository owner.
+
+---
+
+Built with ❤️ using Next.js and AI assistance from Claude
